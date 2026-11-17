@@ -1,0 +1,66 @@
+Java Spring Boot: цифровая подпись и JWT signing
+=================================================
+
+Цель
+----
+
+Изучить цифровую подпись и её практическое применение в подписанном JWT, без перехода пока к X.509-сертификатам.
+
+- JCA `Signature` с алгоритмом `SHA256withRSA` подписывает произвольный текст.
+- JWT использует JWS и алгоритм `RS256` для подписи header + payload.
+- В обоих случаях подписывают приватным RSA-ключом, а проверяют соответствующим публичным ключом.
+
+Важно: подпись подтверждает целостность и владение ключом, но не шифрует данные. JWT payload можно декодировать — не помещай в claims пароли и секреты.
+
+Требования и запуск
+-------------------
+
+Требуются JDK 17+, Gradle 8+ и OpenSSL.
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out private.pem
+openssl pkey -in private.pem -pubout -out public.pem
+export RSA_PUBLIC_KEY_PEM="$(cat public.pem)"
+export RSA_PRIVATE_KEY_PEM="$(cat private.pem)"
+gradle bootRun
+```
+
+PowerShell:
+
+```powershell
+$env:RSA_PUBLIC_KEY_PEM = Get-Content -Raw public.pem
+$env:RSA_PRIVATE_KEY_PEM = Get-Content -Raw private.pem
+gradle bootRun
+```
+
+Не коммить PEM-файлы. Для реального приложения используй KMS/secret manager, контроль доступа и ротацию ключей.
+
+API
+---
+
+- `POST /api/signature/sign` — подписать JSON `{"payload":"..."}`.
+- `POST /api/signature/verify` — проверить payload вместе с `signatureBase64`.
+- `POST /api/jwt/create` — создать RS256 JWT с `issuer`, `subject`, `role`, `ttlSeconds` (1–86400).
+- `POST /api/jwt/validate` — проверить подпись и `exp`, вернуть выбранные claims.
+
+Примеры запросов и ответов находятся в `README.md`.
+
+Тесты
+-----
+
+```bash
+gradle test
+```
+
+В тестах создаются временные RSA-ключи. Используются unit tests и Spring MockMvc integration tests; БД и X.509 сертификаты не нужны.
+
+Для изучения
+------------
+
+1. Подпись приватным ключом и проверка публичным — это не шифрование.
+2. JWT состоит из header, payload и signature; кодирование Base64URL не скрывает содержимое.
+3. Измени payload подписанного JWT: почему проверка подписи должна завершиться ошибкой?
+4. Чем `iss`, `sub`, `exp` и `aud` отличаются от подписи?
+5. Почему публичный ключ нужно получить по доверенному каналу, если сертификатов пока нет?
+
+X.509/PKI оставлены на следующий учебный этап.
